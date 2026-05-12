@@ -1,0 +1,235 @@
+{
+  "mumu": {
+    "instance": "0",
+    "manager_path": "",
+    "adb_path": "",
+    "player_path": "",
+    "cache_path": ".mumu_paths.json",
+    "launch_player": true,
+    "startup_wait_sec": 3
+  },
+  "apps": {
+    "required_packages": [
+      "net.crigh.hzkjsport"
+    ],
+    "launch_packages": [
+      "net.crigh.hzkjsport"
+    ],
+    "launch_package": "net.crigh.hzkjsport",
+    "install_poll_sec": 2,
+    "install_wait_timeout_sec": 120,
+    "launch_wait_sec": 10
+  },
+  "motion": {
+    "jitter_radius_m": 2.0,
+    "base_speed_mps": [
+      2.4,
+      3.4
+    ],
+    "speed_jitter_ratio": 0.18,
+    "speed_update_interval_sec": [
+      10.0,
+      35.0
+    ],
+    "speed_smoothing_ratio": 0.10,
+    "speed_modes": [
+      {
+        "name": "slow",
+        "weight": 0.24,
+        "multiplier": [
+          0.45,
+          0.80
+        ],
+        "duration_sec": [
+          18.0,
+          55.0
+        ]
+      },
+      {
+        "name": "normal",
+        "weight": 0.56,
+        "multiplier": [
+          0.85,
+          1.18
+        ],
+        "duration_sec": [
+          25.0,
+          75.0
+        ]
+      },
+      {
+        "name": "fast",
+        "weight": 0.20,
+        "multiplier": [
+          1.25,
+          1.70
+        ],
+        "duration_sec": [
+          10.0,
+          35.0
+        ]
+      }
+    ],
+    "min_speed_mps": 0.9,
+    "max_speed_mps": 5.2,
+    "tick_interval_sec": 0.4,
+    "tick_interval_jitter_ratio": 0.18,
+    "route_variation_radius_m": 6.0,
+    "route_subdivide_points": 2,
+    "route_midpoint_variation_radius_m": 5.0,
+    "preserve_first_route_point": true,
+    "distance_scale": 1.0,
+    "distance_limit_m": 3200,
+    "route": [
+      [
+        114.437575,
+        30.519154
+      ],
+      [
+        114.438361,
+        30.519072
+      ],
+      [
+        114.438209,
+        30.518088
+      ],
+      [
+        114.437751,
+        30.517808
+      ],
+      [
+        114.437423,
+        30.518158
+      ],
+      [
+        114.437539,
+        30.519103
+      ]
+    ]
+  },
+  "ui": {
+    "image_dir": "img",
+    "screenshot_path": "../screen.png",
+    "tap_delay_sec": 1.0,
+    "default_threshold": 0.75,
+    "debug": false,
+    "log_misses": false,
+    "pre_actions": [
+      {
+        "type": "set_location",
+        "route_index": 0,
+        "repeat": 3,
+        "interval_sec": 0.4
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "pre1.png"
+        },
+        "actions": [],
+        "delay_sec": 1,
+        "max_attempts": 12
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "pre2.png"
+        },
+        "actions": [],
+        "delay_sec": 1,
+        "max_attempts": 12
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "pre3.png"
+        },
+        "actions": [],
+        "delay_sec": 1,
+        "max_attempts": 12
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "pre4.png"
+        },
+        "actions": [
+          {
+            "type": "set_location",
+            "route_index": 0,
+            "repeat": 2,
+            "interval_sec": 0.3
+          }
+        ],
+        "delay_sec": 1,
+        "max_attempts": 12
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "detect",
+          "image": "pause.png",
+          "threshold": 0.7
+        },
+        "actions": [
+          {
+            "type": "set_location",
+            "route_index": 0,
+            "repeat": 3,
+            "interval_sec": 0.4
+          },
+          {
+            "type": "click",
+            "image": "pre3.png"
+          },
+          {
+            "type": "sleep",
+            "seconds": 1
+          },
+          {
+            "type": "click",
+            "image": "pre4.png"
+          }
+        ],
+        "delay_sec": 2,
+        "max_attempts": 8
+      },
+      {
+        "type": "sleep",
+        "seconds": 4
+      }
+    ],
+    "post_actions": [
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "stop.png",
+          "threshold": 0.7
+        },
+        "actions": [],
+        "delay_sec": 1,
+        "max_attempts": 12
+      },
+      {
+        "type": "sleep",
+        "seconds": 1
+      },
+      {
+        "type": "loop_until",
+        "until": {
+          "type": "click",
+          "image": "end.png",
+          "threshold": 0.7
+        },
+        "actions": [],
+        "delay_sec": 1,
+        "max_attempts": 12
+      }
+    ]
+  }
+}
