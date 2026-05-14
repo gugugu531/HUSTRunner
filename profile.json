@@ -1,12 +1,13 @@
 {
   "mumu": {
-    "instance": "0",
+    "instance": "",
+    "prompt_instance": true,
     "manager_path": "",
     "adb_path": "",
     "player_path": "",
     "cache_path": ".mumu_paths.json",
     "launch_player": true,
-    "startup_wait_sec": 3
+    "startup_wait_sec": 60
   },
   "apps": {
     "required_packages": [

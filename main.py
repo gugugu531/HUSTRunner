@@ -174,6 +174,150 @@ def read_current_focus(adb: Path, serial: Optional[str]) -> str:
     return "\n".join(lines) if lines else "current focus not found"
 
 
+def run_mumu_json(mgr: Path, args: List[str], timeout: float = 20.0) -> JsonDict:
+    result = subprocess.run(
+        [str(mgr), *args],
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
+    )
+    output = (result.stdout or "").strip()
+    if result.returncode != 0:
+        details = output or (result.stderr or "").strip() or f"exit code {result.returncode}"
+        raise RuntimeError(details)
+    try:
+        value = json.loads(output)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"invalid MuMuManager JSON output: {output}") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError(f"unexpected MuMuManager output: {output}")
+    return value
+
+
+def wait_for_mumu_process(mgr: Path, instance: str, timeout_sec: float, poll_sec: float, debug: bool) -> None:
+    deadline = time.time() + timeout_sec
+    last_error = ""
+    while True:
+        try:
+            info = run_mumu_json(mgr, ["info", "-v", instance], timeout=10.0)
+            if debug:
+                print(f"{CLR_C}[debug] instance info={json.dumps(info, ensure_ascii=False)}{CLR_RST}")
+            if info.get("is_process_started") or info.get("player_state") == "start_finished":
+                return
+        except Exception as exc:
+            last_error = str(exc)
+        if time.time() >= deadline:
+            suffix = f" Last error: {last_error}" if last_error else ""
+            sys.exit(f"{CLR_A}MuMu instance {instance} did not start within {timeout_sec:.0f}s.{suffix}{CLR_RST}")
+        time.sleep(poll_sec)
+
+
+def read_installed_packages(mgr: Path, instance: str) -> JsonDict:
+    return run_mumu_json(mgr, ["control", "-v", instance, "app", "info", "-i"], timeout=20.0)
+
+
+def find_instances_with_packages(mgr: Path, packages: set) -> List[str]:
+    matches: List[str] = []
+    if not packages:
+        return matches
+    try:
+        all_info = run_mumu_json(mgr, ["info", "-v", "all"], timeout=20.0)
+    except Exception:
+        return matches
+    for index in sorted(str(key) for key in all_info.keys()):
+        try:
+            app_info = read_installed_packages(mgr, index)
+        except Exception:
+            continue
+        installed = set(app_info.keys()) - {"active"}
+        if packages.issubset(installed):
+            matches.append(index)
+    return matches
+
+
+def sort_instance_ids(ids: List[str]) -> List[str]:
+    return sorted(ids, key=lambda item: (not item.isdigit(), int(item) if item.isdigit() else item))
+
+
+def list_mumu_instances(mgr: Path) -> List[JsonDict]:
+    try:
+        all_info = run_mumu_json(mgr, ["info", "-v", "all"], timeout=20.0)
+    except Exception as exc:
+        sys.exit(f"{CLR_A}failed to list MuMu instances: {exc}{CLR_RST}")
+    instances: List[JsonDict] = []
+    for index in sort_instance_ids([str(key) for key in all_info.keys()]):
+        info = all_info.get(index, {})
+        if isinstance(info, dict):
+            item = dict(info)
+            item["index"] = str(item.get("index", index))
+            instances.append(item)
+    if not instances:
+        sys.exit(f"{CLR_A}no MuMu instances found.{CLR_RST}")
+    return instances
+
+
+def package_state_for_instance(mgr: Path, instance: str, packages: set) -> str:
+    if not packages:
+        return "-"
+    try:
+        app_info = read_installed_packages(mgr, instance)
+    except Exception:
+        return "unknown"
+    installed = set(app_info.keys()) - {"active"}
+    missing = sorted(packages - installed)
+    return "installed" if not missing else "missing " + ",".join(missing)
+
+
+def choose_mumu_instance(
+    mgr: Path,
+    profile: JsonDict,
+    cli_instance: Optional[str] = None,
+) -> str:
+    if cli_instance:
+        return str(cli_instance)
+
+    mumu = get_section(profile, "mumu")
+    apps = get_section(profile, "apps")
+    configured = str(mumu.get("instance", "")).strip()
+    prompt_instance = bool(mumu.get("prompt_instance", True))
+    if not prompt_instance:
+        return configured or "0"
+
+    required_packages = set(apps.get("required_packages", []))
+    instances = list_mumu_instances(mgr)
+    preferred = ""
+
+    print(f"{CLR_C}MuMu instances:{CLR_RST}")
+    for item in instances:
+        index = str(item.get("index", ""))
+        name = str(item.get("name", ""))
+        process_state = "started" if item.get("is_process_started") else "stopped"
+        android_state = "android" if item.get("is_android_started") else "booting/off"
+        package_state = package_state_for_instance(mgr, index, required_packages)
+        if not preferred and package_state == "installed":
+            preferred = index
+        marker = "*" if configured and index == configured else " "
+        print(f" {marker} [{index}] {name} | {process_state}, {android_state} | app: {package_state}")
+
+    available_ids = {str(item.get("index", "")) for item in instances}
+    if not preferred and configured in available_ids:
+        preferred = configured
+    if not preferred:
+        preferred = str(instances[0].get("index", "0"))
+
+    while True:
+        try:
+            answer = input(f"Select MuMu instance [{preferred}]: ").strip()
+        except EOFError:
+            answer = ""
+        selected = answer or preferred
+        if selected in available_ids:
+            print(f"{CLR_C}selected MuMu instance: {selected}{CLR_RST}")
+            return selected
+        print(f"{CLR_A}unknown MuMu instance: {selected}{CLR_RST}")
+
+
 def meter_to_deg(lat: float, dx: float, dy: float) -> Tuple[float, float]:
     d_lat = dy / 111_320
     d_lon = dx / (111_320 * math.cos(math.radians(lat)))
@@ -404,39 +548,66 @@ def launch_emulator_and_app(
         print(f"{CLR_C}[debug] player={player if player else ''}{CLR_RST}")
         print(f"{CLR_C}[debug] instance={instance}{CLR_RST}")
 
-    if bool(mumu.get("launch_player", True)) and player and player.is_file():
-        subprocess.Popen([str(player)])
-        print(f"{CLR_P}starting MuMu: {player}{CLR_RST}")
-        time.sleep(float(mumu.get("startup_wait_sec", 3.0)))
+    if bool(mumu.get("launch_player", True)):
+        try:
+            launch_result = run_mumu_json(mgr, ["control", "-v", instance, "launch"], timeout=20.0)
+            if launch_result.get("errcode", 0) != 0:
+                raise RuntimeError(json.dumps(launch_result, ensure_ascii=False))
+            print(f"{CLR_P}starting MuMu instance {instance}: {mgr}{CLR_RST}")
+        except Exception as exc:
+            if player and player.is_file():
+                subprocess.Popen([str(player)])
+                print(f"{CLR_P}starting MuMu fallback: {player}{CLR_RST}")
+                if debug:
+                    print(f"{CLR_C}[debug] failed to launch instance with MuMuManager: {exc}{CLR_RST}")
+            else:
+                sys.exit(f"{CLR_A}failed to launch MuMu instance {instance}: {exc}{CLR_RST}")
+        wait_for_mumu_process(
+            mgr,
+            instance,
+            float(mumu.get("startup_wait_sec", 30.0)),
+            float(mumu.get("startup_poll_sec", 1.0)),
+            debug,
+        )
 
     required_packages = set(apps.get("required_packages", []))
     poll_sec = float(apps.get("install_poll_sec", 2.0))
     wait_timeout = float(apps.get("install_wait_timeout_sec", 120.0))
     deadline = time.time() + wait_timeout
+    next_notice = 0.0
+    last_error = ""
+    installed = set()
 
     while required_packages:
         try:
-            out = subprocess.check_output(
-                [str(mgr), "control", "-v", instance, "app", "info", "-i"],
-                encoding="utf-8",
-            )
-            app_info = json.loads(out)
-            installed = set(app_info.keys())
+            app_info = read_installed_packages(mgr, instance)
+            installed = set(app_info.keys()) - {"active"}
             if debug:
                 active = app_info.get("active", "")
                 print(f"{CLR_C}[debug] installed packages={sorted(installed)}, active={active}{CLR_RST}")
             if required_packages.issubset(installed):
                 break
-        except Exception:
-            pass
+        except Exception as exc:
+            last_error = str(exc)
+            if debug:
+                print(f"{CLR_C}[debug] app info failed for instance {instance}: {last_error}{CLR_RST}")
         if time.time() >= deadline:
-            missing = ", ".join(sorted(required_packages - installed)) if "installed" in locals() else ", ".join(sorted(required_packages))
-            sys.exit(f"{CLR_A}required packages not found: {missing}{CLR_RST}")
+            missing = ", ".join(sorted(required_packages - installed))
+            matches = find_instances_with_packages(mgr, required_packages)
+            hint = f" Found in MuMu instance(s): {', '.join(matches)}." if matches else ""
+            suffix = f" Last error: {last_error}" if last_error else ""
+            sys.exit(
+                f"{CLR_A}required packages not found in MuMu instance {instance}: {missing}."
+                f"{hint} Re-run and select the correct instance, or pass --instance <index>.{suffix}{CLR_RST}"
+            )
+        now = time.time()
+        if now >= next_notice:
+            missing = ", ".join(sorted(required_packages - installed))
+            print(f"{CLR_C}waiting for packages in MuMu instance {instance}: {missing}{CLR_RST}")
+            next_notice = now + max(10.0, poll_sec)
         time.sleep(poll_sec)
 
-    info = json.loads(
-        subprocess.check_output([str(mgr), "info", "-v", instance], encoding="utf-8")
-    )
+    info = run_mumu_json(mgr, ["info", "-v", instance], timeout=20.0)
     serial = f"{info['adb_host_ip']}:{info['adb_port']}"
     subprocess.run([str(adb), "connect", serial], stdout=subprocess.DEVNULL)
     print(f"{CLR_C}ADB connected: {serial}{CLR_RST}")
@@ -683,12 +854,13 @@ def simulate_walk(ctx: JsonDict) -> None:
             break
 
 
-def build_context(profile: JsonDict, profile_path: Path) -> JsonDict:
+def build_context(profile: JsonDict, profile_path: Path, cli_instance: Optional[str] = None) -> JsonDict:
     ui = get_section(profile, "ui")
     apps = get_section(profile, "apps")
     motion = get_section(profile, "motion")
     base_dir = profile_path.parent
-    mgr, adb, player, instance = resolve_mumu_paths(profile, profile_path.parent)
+    mgr, adb, player, _ = resolve_mumu_paths(profile, profile_path.parent)
+    instance = choose_mumu_instance(mgr, profile, cli_instance)
     serial = launch_emulator_and_app(mgr, adb, player, instance, profile)
     image_dir = Path(ui.get("image_dir", "img"))
     if not image_dir.is_absolute():
@@ -727,11 +899,12 @@ def build_context(profile: JsonDict, profile_path: Path) -> JsonDict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Configurable MuMu location and UI automation runner.")
     parser.add_argument("profile", nargs="?", default=None, help="Path to profile JSON.")
+    parser.add_argument("--instance", default=None, help="MuMu instance index. Skips interactive selection.")
     args = parser.parse_args()
 
     profile_path = Path(args.profile).resolve() if args.profile else Path(__file__).with_name("profile.example.json")
     profile = load_profile(profile_path)
-    ctx = build_context(profile, profile_path)
+    ctx = build_context(profile, profile_path, args.instance)
 
     ui = get_section(profile, "ui")
     if not run_actions(ui.get("pre_actions", []), ctx):

@@ -73,7 +73,7 @@ pip install -r requirements.txt
 
 通常只需要先检查 `profile.json` 中这几处：
 
-- `mumu.instance`：MuMu 实例编号，默认是 `"0"`。
+- `mumu.prompt_instance`：是否在启动时交互选择 MuMu 实例，当前为 `true`。
 - `motion.route`：路线坐标，格式为 `[经度, 纬度]`。
 - `motion.distance_limit_m`：达到多少米后结束，当前为 `3200`。
 - `ui.image_dir`：按钮模板目录，当前为 `img`。
@@ -99,6 +99,14 @@ pip install -r requirements.txt
 python main.py profile.json
 ```
 
+启动后会列出当前 MuMu 实例，并显示每个实例的启动状态和目标 App 安装情况。直接回车会使用推荐实例，也可以输入实例编号手动选择。
+
+如果需要跳过交互，可以在命令行中直接指定实例：
+
+```powershell
+python main.py profile.json --instance 1
+```
+
 ## 配置说明
 
 ### MuMu 配置
@@ -108,13 +116,14 @@ python main.py profile.json
 ```json
 {
   "mumu": {
-    "instance": "0",
+    "instance": "",
+    "prompt_instance": true,
     "manager_path": "",
     "adb_path": "",
     "player_path": "",
     "cache_path": ".mumu_paths.json",
     "launch_player": true,
-    "startup_wait_sec": 3
+    "startup_wait_sec": 60
   }
 }
 ```
@@ -214,6 +223,7 @@ python main.py profile.json
 常见排查方向：
 
 - `required packages not found`：目标 App 未安装，或包名配置不正确。
+- `Found in MuMu instance(s): ...`：App 装在其他模拟器实例中，重新运行时选择提示的编号，或用 `--instance` 指定。
 - 图片匹配失败：重新截取按钮模板，确认分辨率、主题和缩放一致。
 - ADB 连接异常：确认 MuMu 已启动，或手动填写 `mumu.adb_path`。
 - 定位未生效：增加 `set_location.repeat`，或延长 App 启动后的等待时间。
