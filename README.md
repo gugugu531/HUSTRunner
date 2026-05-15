@@ -150,11 +150,15 @@ python main.py profile.json --instance 1
 - `base_speed_mps`：基础速度，支持固定值或 `[最小值, 最大值]`。
 - `speed_modes`：慢速、正常、快速等配速模式及权重。
 - `min_speed_mps` / `max_speed_mps`：速度上下限。
+- `speed_micro_jitter_ratio`：每次定位周期内的细微速度波动。
+- `speed_pause_chance_per_min` / `speed_pause_duration_sec`：低概率短暂停顿。
 - `tick_interval_sec`：定位广播间隔。
-- `jitter_radius_m`：每次下发定位时的随机抖动半径。
+- `jitter_radius_m`：每次下发定位时的小幅独立抖动半径，不宜过大。
 - `route_variation_radius_m`：运行前对路线点做轻微偏移。
-- `route_subdivide_points`：在路线点之间插入随机中间点。
-- `distance_scale`：距离倍率，通常保持 `1.0`。
+- `route_subdivide_points`：在路线点之间插入随机中间点，支持固定值或 `[最小值, 最大值]`。
+- `route_drift_radius_m`：行进时沿当前路段法线方向产生平滑横向漂移。
+- `gps_drift_radius_m`：模拟 GPS 信号的慢速整体漂移，比高频抖动更接近真实轨迹。
+- `distance_scale`：距离倍率；如果 App 记录距离偏大，可略低于 `1.0`。
 - `distance_limit_m`：模拟距离达到该值后结束。
 
 ### UI 自动化配置

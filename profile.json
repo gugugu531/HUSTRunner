@@ -22,64 +22,86 @@
     "launch_wait_sec": 10
   },
   "motion": {
-    "jitter_radius_m": 2.0,
+    "jitter_radius_m": 0.8,
     "base_speed_mps": [
-      2.4,
-      3.4
+      2.5,
+      3.2
     ],
-    "speed_jitter_ratio": 0.18,
+    "speed_jitter_ratio": 0.12,
     "speed_update_interval_sec": [
-      10.0,
-      35.0
+      30.0,
+      90.0
     ],
-    "speed_smoothing_ratio": 0.10,
+    "speed_smoothing_ratio": 0.06,
+    "speed_micro_jitter_ratio": 0.03,
+    "speed_micro_jitter_smoothing_ratio": 0.15,
+    "speed_pause_chance_per_min": 0.015,
+    "speed_pause_duration_sec": [
+      0.8,
+      1.8
+    ],
     "speed_modes": [
       {
         "name": "slow",
-        "weight": 0.24,
+        "weight": 0.18,
         "multiplier": [
-          0.45,
-          0.80
+          0.72,
+          0.92
         ],
         "duration_sec": [
-          18.0,
-          55.0
+          45.0,
+          100.0
         ]
       },
       {
         "name": "normal",
-        "weight": 0.56,
+        "weight": 0.66,
         "multiplier": [
-          0.85,
-          1.18
+          0.93,
+          1.08
         ],
         "duration_sec": [
-          25.0,
-          75.0
+          60.0,
+          140.0
         ]
       },
       {
         "name": "fast",
-        "weight": 0.20,
+        "weight": 0.16,
         "multiplier": [
-          1.25,
-          1.70
+          1.08,
+          1.24
         ],
         "duration_sec": [
-          10.0,
-          35.0
+          25.0,
+          70.0
         ]
       }
     ],
-    "min_speed_mps": 0.9,
-    "max_speed_mps": 5.2,
-    "tick_interval_sec": 0.4,
-    "tick_interval_jitter_ratio": 0.18,
-    "route_variation_radius_m": 6.0,
-    "route_subdivide_points": 2,
-    "route_midpoint_variation_radius_m": 5.0,
+    "min_speed_mps": 1.7,
+    "max_speed_mps": 4.0,
+    "tick_interval_sec": 1.0,
+    "tick_interval_jitter_ratio": 0.12,
+    "route_variation_radius_m": 3.0,
+    "route_subdivide_points": [
+      1,
+      2
+    ],
+    "route_midpoint_variation_radius_m": 2.0,
+    "route_drift_radius_m": 1.5,
+    "route_drift_update_interval_sec": [
+      15.0,
+      35.0
+    ],
+    "route_drift_smoothing_ratio": 0.08,
+    "gps_drift_radius_m": 2.0,
+    "gps_drift_update_interval_sec": [
+      20.0,
+      60.0
+    ],
+    "gps_drift_smoothing_ratio": 0.06,
     "preserve_first_route_point": true,
-    "distance_scale": 1.0,
+    "distance_scale": 0.94,
     "distance_limit_m": 3200,
     "route": [
       [

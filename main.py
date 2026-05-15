@@ -340,6 +340,51 @@ def random_range(value: Any, default: float) -> float:
     return float(value)
 
 
+def random_int_range(value: Any, default: int) -> int:
+    if value is None:
+        return default
+    if isinstance(value, list) and len(value) == 2:
+        low, high = int(float(value[0])), int(float(value[1]))
+        if low > high:
+            low, high = high, low
+        return random.randint(low, high)
+    return int(float(value))
+
+
+def max_int_value(value: Any, default: int) -> int:
+    if value is None:
+        return default
+    if isinstance(value, list) and len(value) == 2:
+        return max(int(float(value[0])), int(float(value[1])))
+    return int(float(value))
+
+
+def random_disk_offset(radius_m: float) -> Tuple[float, float]:
+    if radius_m <= 0:
+        return 0.0, 0.0
+    angle = random.uniform(0.0, math.tau)
+    radius = radius_m * math.sqrt(random.random())
+    return math.cos(angle) * radius, math.sin(angle) * radius
+
+
+def clamp(value: float, low: Optional[float], high: Optional[float]) -> float:
+    if low is not None:
+        value = max(value, low)
+    if high is not None:
+        value = min(value, high)
+    return value
+
+
+def segment_perpendicular_m(lon1: float, lat1: float, lon2: float, lat2: float) -> Tuple[float, float]:
+    mid_lat = (lat1 + lat2) / 2
+    east_m = (lon2 - lon1) * 111_320 * math.cos(math.radians(mid_lat))
+    north_m = (lat2 - lat1) * 111_320
+    length = math.hypot(east_m, north_m)
+    if length <= 0:
+        return 0.0, 0.0
+    return -north_m / length, east_m / length
+
+
 def weighted_choice(items: List[JsonDict]) -> Optional[JsonDict]:
     if not items:
         return None
@@ -366,35 +411,40 @@ def build_runtime_route(route: Route, motion: JsonDict) -> Route:
             varied_route.append((lon, lat))
             continue
 
-        angle = random.uniform(0.0, math.tau)
-        radius = radius_m * math.sqrt(random.random())
-        east_m = math.cos(angle) * radius
-        north_m = math.sin(angle) * radius
+        east_m, north_m = random_disk_offset(radius_m)
         varied_route.append(offset_lon_lat(lon, lat, east_m, north_m))
 
-    subdivide_points = int(motion.get("route_subdivide_points", 0))
+    subdivide_points_value = motion.get("route_subdivide_points", 0)
     midpoint_radius_m = float(motion.get("route_midpoint_variation_radius_m", radius_m))
-    if subdivide_points <= 0:
+    max_subdivide_points = max(0, max_int_value(subdivide_points_value, 0))
+    if max_subdivide_points <= 0:
         return varied_route
 
     runtime_route: Route = []
     for index, (lon1, lat1) in enumerate(varied_route):
         lon2, lat2 = varied_route[(index + 1) % len(varied_route)]
         runtime_route.append((lon1, lat1))
+        subdivide_points = max(0, random_int_range(subdivide_points_value, max_subdivide_points))
         for step in range(1, subdivide_points + 1):
             ratio = step / (subdivide_points + 1)
             lon = lon1 + (lon2 - lon1) * ratio
             lat = lat1 + (lat2 - lat1) * ratio
-            angle = random.uniform(0.0, math.tau)
-            radius = midpoint_radius_m * math.sqrt(random.random())
-            east_m = math.cos(angle) * radius
-            north_m = math.sin(angle) * radius
+            east_m, north_m = random_disk_offset(midpoint_radius_m)
             runtime_route.append(offset_lon_lat(lon, lat, east_m, north_m))
     return runtime_route
 
 
-def set_location(mgr_path: Path, instance: str, lon: float, lat: float, jitter_m: float) -> None:
-    dx, dy = (random.uniform(-jitter_m, jitter_m) for _ in range(2))
+def set_location(
+    mgr_path: Path,
+    instance: str,
+    lon: float,
+    lat: float,
+    jitter_m: float,
+    drift_m: Tuple[float, float] = (0.0, 0.0),
+) -> None:
+    jitter_east_m, jitter_north_m = random_disk_offset(jitter_m)
+    dx = drift_m[0] + jitter_east_m
+    dy = drift_m[1] + jitter_north_m
     d_lat, d_lon = meter_to_deg(lat, dx, dy)
     result = subprocess.run(
         [
@@ -766,12 +816,26 @@ def simulate_walk(ctx: JsonDict) -> None:
     route = build_runtime_route(ctx["route"], motion)
     speed_jitter_ratio = float(motion.get("speed_jitter_ratio", 0.20))
     speed_smoothing_ratio = float(motion.get("speed_smoothing_ratio", 0.25))
+    speed_micro_jitter_ratio = float(motion.get("speed_micro_jitter_ratio", 0.0))
+    speed_micro_jitter_smoothing_ratio = float(motion.get("speed_micro_jitter_smoothing_ratio", 0.35))
+    speed_pause_chance_per_min = float(motion.get("speed_pause_chance_per_min", 0.0))
+    speed_pause_duration = motion.get("speed_pause_duration_sec", [0.8, 2.0])
     tick_interval_sec = float(motion.get("tick_interval_sec", 0.40))
     tick_interval_jitter_ratio = float(motion.get("tick_interval_jitter_ratio", 0.0))
     distance_limit_m = float(motion.get("distance_limit_m", 16000))
     distance_scale = float(motion.get("distance_scale", 1.0))
     speed_update_interval = motion.get("speed_update_interval_sec", [2.5, 7.0])
     speed_modes = motion.get("speed_modes", [])
+    min_speed_value = motion.get("min_speed_mps")
+    max_speed_value = motion.get("max_speed_mps")
+    min_speed = float(min_speed_value) if min_speed_value is not None else None
+    max_speed = float(max_speed_value) if max_speed_value is not None else None
+    route_drift_radius_m = float(motion.get("route_drift_radius_m", 0.0))
+    route_drift_update_interval = motion.get("route_drift_update_interval_sec", [3.0, 8.0])
+    route_drift_smoothing_ratio = float(motion.get("route_drift_smoothing_ratio", 0.25))
+    gps_drift_radius_m = float(motion.get("gps_drift_radius_m", 0.0))
+    gps_drift_update_interval = motion.get("gps_drift_update_interval_sec", [20.0, 60.0])
+    gps_drift_smoothing_ratio = float(motion.get("gps_drift_smoothing_ratio", 0.06))
 
     def new_target_speed() -> Tuple[float, str, float]:
         base_speed_mps = random_range(motion.get("base_speed_mps", 4.5), 4.5)
@@ -784,13 +848,7 @@ def simulate_walk(ctx: JsonDict) -> None:
             multiplier = random_range(mode.get("multiplier", 1.0), 1.0)
             duration = random_range(mode.get("duration_sec", speed_update_interval), duration)
         speed = base_speed_mps * multiplier * random.uniform(1 - speed_jitter_ratio, 1 + speed_jitter_ratio)
-        min_speed = motion.get("min_speed_mps")
-        max_speed = motion.get("max_speed_mps")
-        if min_speed is not None:
-            speed = max(speed, float(min_speed))
-        if max_speed is not None:
-            speed = min(speed, float(max_speed))
-        return speed, mode_name, duration
+        return clamp(speed, min_speed, max_speed), mode_name, duration
 
     idx, seg_dist, total_dist = 0, 0.0, 0.0
     t_start = t_prev = time.perf_counter()
@@ -798,12 +856,22 @@ def simulate_walk(ctx: JsonDict) -> None:
     target_speed = speed
     next_speed_update = t_prev + speed_duration
     next_tick = t_prev + tick_interval_sec
+    micro_speed_factor = 1.0
+    route_drift_m = 0.0
+    target_route_drift_m = random.uniform(-route_drift_radius_m, route_drift_radius_m) if route_drift_radius_m > 0 else 0.0
+    next_route_drift_update = t_prev + random_range(route_drift_update_interval, 5.0)
+    gps_drift_east_m, gps_drift_north_m = 0.0, 0.0
+    target_gps_drift_east_m, target_gps_drift_north_m = random_disk_offset(gps_drift_radius_m)
+    next_gps_drift_update = t_prev + random_range(gps_drift_update_interval, 40.0)
+    pause_until = 0.0
     frame = 0
 
     debug_log(
         ctx,
         f"runtime_route_length={route_length_m(route):.2f}m, "
         f"route_points={len(route)}, route_variation_radius={motion.get('route_variation_radius_m', 0)}m, "
+        f"route_drift_radius={route_drift_radius_m}m, "
+        f"gps_drift_radius={gps_drift_radius_m}m, "
         f"initial_speed={speed:.2f}m/s, speed_mode={speed_mode}, speed_duration={speed_duration:.1f}s",
     )
 
@@ -826,8 +894,20 @@ def simulate_walk(ctx: JsonDict) -> None:
             next_speed_update = now + speed_duration
             debug_log(ctx, f"new target_speed={target_speed:.2f}m/s, mode={speed_mode}, duration={speed_duration:.1f}s")
         speed += (target_speed - speed) * speed_smoothing_ratio
+        if speed_micro_jitter_ratio > 0:
+            micro_target = random.uniform(1 - speed_micro_jitter_ratio, 1 + speed_micro_jitter_ratio)
+            micro_speed_factor += (micro_target - micro_speed_factor) * speed_micro_jitter_smoothing_ratio
+        else:
+            micro_speed_factor = 1.0
+        move_speed = clamp(speed * micro_speed_factor, min_speed, max_speed)
 
-        move = speed * dt * distance_scale
+        if pause_until <= now and speed_pause_chance_per_min > 0 and random.random() < speed_pause_chance_per_min * dt / 60.0:
+            pause_until = now + max(0.0, random_range(speed_pause_duration, 1.0))
+            debug_log(ctx, f"pause movement for {max(0.0, pause_until - now):.1f}s")
+        if now < pause_until:
+            move_speed = 0.0
+
+        move = move_speed * dt * distance_scale
         seg_dist += move
         total_dist += move
 
@@ -841,13 +921,31 @@ def simulate_walk(ctx: JsonDict) -> None:
         ratio = seg_dist / seg_len
         lon = lon1 + (lon2 - lon1) * ratio
         lat = lat1 + (lat2 - lat1) * ratio
-        set_location(ctx["mgr"], ctx["instance"], lon, lat, ctx["jitter_m"])
+        if route_drift_radius_m > 0:
+            if now >= next_route_drift_update:
+                target_route_drift_m = random.uniform(-route_drift_radius_m, route_drift_radius_m)
+                next_route_drift_update = now + random_range(route_drift_update_interval, 5.0)
+                debug_log(ctx, f"new route_drift={target_route_drift_m:.2f}m")
+            route_drift_m += (target_route_drift_m - route_drift_m) * route_drift_smoothing_ratio
+            east_unit, north_unit = segment_perpendicular_m(lon1, lat1, lon2, lat2)
+            lon, lat = offset_lon_lat(lon, lat, east_unit * route_drift_m, north_unit * route_drift_m)
+        if gps_drift_radius_m > 0:
+            if now >= next_gps_drift_update:
+                target_gps_drift_east_m, target_gps_drift_north_m = random_disk_offset(gps_drift_radius_m)
+                next_gps_drift_update = now + random_range(gps_drift_update_interval, 40.0)
+                debug_log(
+                    ctx,
+                    f"new gps_drift=({target_gps_drift_east_m:.2f}m, {target_gps_drift_north_m:.2f}m)",
+                )
+            gps_drift_east_m += (target_gps_drift_east_m - gps_drift_east_m) * gps_drift_smoothing_ratio
+            gps_drift_north_m += (target_gps_drift_north_m - gps_drift_north_m) * gps_drift_smoothing_ratio
+        set_location(ctx["mgr"], ctx["instance"], lon, lat, ctx["jitter_m"], (gps_drift_east_m, gps_drift_north_m))
 
         frame += 1
         elapsed = now - t_start
         os.system("cls" if os.name == "nt" else "clear")
         print(f"{HEART}running configured route{CLR_RST}")
-        print_status(elapsed, speed, total_dist, frame)
+        print_status(elapsed, move_speed, total_dist, frame)
 
         if total_dist >= distance_limit_m:
             print(f"{CLR_A}distance limit reached{CLR_RST}")
