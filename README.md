@@ -45,67 +45,7 @@ HustRunner 是一个基于 MuMu 模拟器的校园跑自动化脚本。脚本通
 
 ## 快速开始
 
-### 1. 准备 MuMu 和 App
-
-1. 安装并启动 MuMu Player 12。
-2. 在 MuMu 中安装目标 App，并且登录。
-3. 确认 App 包名与 `profile.json` 中的配置一致：
-
-```json
-{
-  "apps": {
-    "required_packages": ["net.crigh.hzkjsport"],
-    "launch_packages": ["net.crigh.hzkjsport"],
-    "launch_package": "net.crigh.hzkjsport"
-  }
-}
-```
-
-### 2. 安装 Python 依赖
-
-执行：
-
-```powershell
-pip install -r requirements.txt
-```
-
-### 3. 检查配置
-
-通常只需要先检查 `profile.json` 中这几处：
-
-- `mumu.prompt_instance`：是否在启动时交互选择 MuMu 实例，当前为 `true`。
-- `motion.route`：路线坐标，格式为 `[经度, 纬度]`。
-- `motion.distance_limit_m`：达到多少米后结束，当前为 `3200`。
-- `ui.image_dir`：按钮模板目录，当前为 `img`。
-- `ui.pre_actions` / `ui.post_actions`：跑前和跑后的自动点击流程。
-
-如果自动发现 MuMu 路径失败，可以手动填写：
-
-```json
-{
-  "mumu": {
-    "manager_path": "MuMuManager.exe路径",
-    "adb_path": "MuMuPlayer的adb.exe路径",
-    "player_path": "MuMuPlayer.exe路径"
-  }
-}
-```
-
-### 4. 运行脚本
-
-建议显式传入当前配置文件：
-
-```powershell
-python main.py profile.json
-```
-
-启动后会列出当前 MuMu 实例，并显示每个实例的启动状态和目标 App 安装情况。直接回车会使用推荐实例，也可以输入实例编号手动选择。
-
-如果需要跳过交互，可以在命令行中直接指定实例：
-
-```powershell
-python main.py profile.json --instance 1
-```
+参阅QUICKSTART.md
 
 ## 配置说明
 
