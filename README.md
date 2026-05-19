@@ -72,18 +72,36 @@ HustRunner 是一个基于 MuMu 模拟器的校园跑自动化脚本。脚本通
 
 ### 路线与运动参数
 
-`motion.route` 是基础路线点（项目中所用路径点位于东操，你可以修改），坐标顺序固定为 `[经度, 纬度]`：
+当前默认使用 `track_400m` 跑道模式。`motion.track_points` 需要按顺时针跑法给出 6 个控制点，坐标顺序固定为 `[经度, 纬度]`：
+
+1. 直道起点
+2. 直道中点，也就是第一段弯道起点
+3. 第一段弯道中点
+4. 第一段弯道终点，也就是第二段直道起点
+5. 第二段直道终点，也就是第二段弯道起点
+6. 第二段弯道中点
+
+脚本会把这 6 个点生成两段直道和两段圆弧弯道，最后自动从第 6 个点所在弯道回到第 1 个点。
 
 ```json
 {
   "motion": {
-    "route": [
-      [114.437575, 30.519154],
-      [114.438361, 30.519072]
+    "route_mode": "track_400m",
+    "track_straight_sample_points": 10,
+    "track_curve_sample_points": 18,
+    "track_points": [
+      [114.437553, 30.519142],
+      [114.437414, 30.518185],
+      [114.437742, 30.517800],
+      [114.438213, 30.518108],
+      [114.438339, 30.519045],
+      [114.437984, 30.519442]
     ]
   }
 }
 ```
+
+如果需要回到旧的折线路线模式，可以把 `route_mode` 改成 `route`，并继续使用 `motion.route`。
 
 常用参数：
 
@@ -94,8 +112,10 @@ HustRunner 是一个基于 MuMu 模拟器的校园跑自动化脚本。脚本通
 - `speed_pause_chance_per_min` / `speed_pause_duration_sec`：低概率短暂停顿。
 - `tick_interval_sec`：定位广播间隔。
 - `jitter_radius_m`：每次下发定位时的小幅独立抖动半径，不宜过大。
-- `route_variation_radius_m`：运行前对路线点做轻微偏移。
-- `route_subdivide_points`：在路线点之间插入随机中间点，支持固定值或 `[最小值, 最大值]`。
+- `track_straight_sample_points`：每段直道内部插入的采样点数量。
+- `track_curve_sample_points`：每段弯道内部插入的采样点数量，越大弯道越平滑。
+- `route_variation_radius_m`：运行前对路线点做轻微偏移。跑道模式下建议保持 `0`，避免圆弧被打散。
+- `route_subdivide_points`：在路线点之间插入随机中间点，支持固定值或 `[最小值, 最大值]`。跑道模式下建议保持 `0`。
 - `route_drift_radius_m`：行进时沿当前路段法线方向产生平滑横向漂移。
 - `gps_drift_radius_m`：模拟 GPS 信号的慢速整体漂移，比高频抖动更接近真实轨迹。
 - `distance_scale`：距离倍率；如果 App 记录距离偏大，可略低于 `1.0`。

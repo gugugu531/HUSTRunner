@@ -29,6 +29,7 @@ CLR_RST = "\x1b[0m"
 
 JsonDict = Dict[str, Any]
 Route = List[Tuple[float, float]]
+PointM = Tuple[float, float]
 
 
 def load_profile(path: Path) -> JsonDict:
@@ -329,6 +330,20 @@ def offset_lon_lat(lon: float, lat: float, east_m: float, north_m: float) -> Tup
     return lon + d_lon, lat + d_lat
 
 
+def lon_lat_to_local_m(lon: float, lat: float, origin_lon: float, origin_lat: float) -> PointM:
+    mean_lat_rad = math.radians((lat + origin_lat) / 2.0)
+    east_m = (lon - origin_lon) * 111_320.0 * math.cos(mean_lat_rad)
+    north_m = (lat - origin_lat) * 111_320.0
+    return east_m, north_m
+
+
+def local_m_to_lon_lat(east_m: float, north_m: float, origin_lon: float, origin_lat: float) -> Tuple[float, float]:
+    lat = origin_lat + north_m / 111_320.0
+    mean_lat_rad = math.radians((lat + origin_lat) / 2.0)
+    lon = origin_lon + east_m / (111_320.0 * math.cos(mean_lat_rad))
+    return lon, lat
+
+
 def random_range(value: Any, default: float) -> float:
     if value is None:
         return default
@@ -400,6 +415,104 @@ def weighted_choice(items: List[JsonDict]) -> Optional[JsonDict]:
         if upto >= marker:
             return item
     return items[-1]
+
+
+def circle_from_three_points(p1: PointM, p2: PointM, p3: PointM) -> Optional[Tuple[PointM, float]]:
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    det = 2.0 * (x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2))
+    if abs(det) < 1e-6:
+        return None
+    sq1 = x1 * x1 + y1 * y1
+    sq2 = x2 * x2 + y2 * y2
+    sq3 = x3 * x3 + y3 * y3
+    cx = (sq1 * (y2 - y3) + sq2 * (y3 - y1) + sq3 * (y1 - y2)) / det
+    cy = (sq1 * (x3 - x2) + sq2 * (x1 - x3) + sq3 * (x2 - x1)) / det
+    radius = math.hypot(x1 - cx, y1 - cy)
+    if radius <= 0:
+        return None
+    return (cx, cy), radius
+
+
+def normalize_angle(angle: float) -> float:
+    return angle % math.tau
+
+
+def angle_between_ccw(start: float, target: float, end: float) -> bool:
+    return normalize_angle(target - start) <= normalize_angle(end - start)
+
+
+def sample_arc_through_mid(start: PointM, mid: PointM, end: PointM, points: int) -> List[PointM]:
+    circle = circle_from_three_points(start, mid, end)
+    if circle is None:
+        return sample_line(start, end, points)
+
+    (cx, cy), radius = circle
+    start_angle = math.atan2(start[1] - cy, start[0] - cx)
+    mid_angle = math.atan2(mid[1] - cy, mid[0] - cx)
+    end_angle = math.atan2(end[1] - cy, end[0] - cx)
+    ccw = angle_between_ccw(start_angle, mid_angle, end_angle)
+    span = normalize_angle(end_angle - start_angle) if ccw else -normalize_angle(start_angle - end_angle)
+
+    result: List[PointM] = []
+    for step in range(1, points + 1):
+        ratio = step / (points + 1)
+        angle = start_angle + span * ratio
+        result.append((cx + math.cos(angle) * radius, cy + math.sin(angle) * radius))
+    return result
+
+
+def sample_line(start: PointM, end: PointM, points: int) -> List[PointM]:
+    result: List[PointM] = []
+    for step in range(1, points + 1):
+        ratio = step / (points + 1)
+        result.append((start[0] + (end[0] - start[0]) * ratio, start[1] + (end[1] - start[1]) * ratio))
+    return result
+
+
+def read_lon_lat_points(raw: Any, field_name: str, min_points: int) -> Route:
+    if not isinstance(raw, list) or len(raw) < min_points:
+        sys.exit(f"{CLR_A}{field_name} must contain at least {min_points} [lon, lat] points.{CLR_RST}")
+    route: Route = []
+    for item in raw:
+        if not isinstance(item, list) or len(item) != 2:
+            sys.exit(f"{CLR_A}each {field_name} point must be [lon, lat].{CLR_RST}")
+        route.append((float(item[0]), float(item[1])))
+    return route
+
+
+def build_track_route(control_points: Route, motion: JsonDict) -> Route:
+    if len(control_points) != 6:
+        sys.exit(f"{CLR_A}motion.track_points must contain exactly six [lon, lat] points.{CLR_RST}")
+
+    origin_lon = sum(lon for lon, _ in control_points) / len(control_points)
+    origin_lat = sum(lat for _, lat in control_points) / len(control_points)
+    points_m = [lon_lat_to_local_m(lon, lat, origin_lon, origin_lat) for lon, lat in control_points]
+
+    straight_points = max(0, int(motion.get("track_straight_sample_points", 10)))
+    curve_points = max(1, int(motion.get("track_curve_sample_points", 18)))
+    sampled_m: List[PointM] = []
+
+    def append_unique(point: PointM) -> None:
+        if not sampled_m or math.hypot(sampled_m[-1][0] - point[0], sampled_m[-1][1] - point[1]) > 0.01:
+            sampled_m.append(point)
+
+    a, b, c, d, e, f = points_m
+    append_unique(a)
+    for point in sample_line(a, b, straight_points):
+        append_unique(point)
+    append_unique(b)
+    for point in sample_arc_through_mid(b, c, d, curve_points):
+        append_unique(point)
+    append_unique(d)
+    for point in sample_line(d, e, straight_points):
+        append_unique(point)
+    append_unique(e)
+    for point in sample_arc_through_mid(e, f, a, curve_points):
+        append_unique(point)
+
+    return [local_m_to_lon_lat(east, north, origin_lon, origin_lat) for east, north in sampled_m]
 
 
 def build_runtime_route(route: Route, motion: JsonDict) -> Route:
@@ -569,15 +682,12 @@ def route_length_m(route: Route) -> float:
 
 def read_route(profile: JsonDict) -> Route:
     motion = get_section(profile, "motion")
-    route_raw = motion.get("route", [])
-    if not isinstance(route_raw, list) or len(route_raw) < 2:
-        sys.exit(f"{CLR_A}motion.route must contain at least two [lon, lat] points.{CLR_RST}")
-    route: Route = []
-    for item in route_raw:
-        if not isinstance(item, list) or len(item) != 2:
-            sys.exit(f"{CLR_A}each route point must be [lon, lat].{CLR_RST}")
-        route.append((float(item[0]), float(item[1])))
-    return route
+    route_mode = str(motion.get("route_mode", "route")).lower()
+    if route_mode == "track_400m":
+        control_points = read_lon_lat_points(motion.get("track_points", []), "motion.track_points", 6)
+        return build_track_route(control_points, motion)
+
+    return read_lon_lat_points(motion.get("route", []), "motion.route", 2)
 
 
 def launch_emulator_and_app(

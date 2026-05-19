@@ -82,12 +82,9 @@
     "max_speed_mps": 4.0,
     "tick_interval_sec": 1.0,
     "tick_interval_jitter_ratio": 0.12,
-    "route_variation_radius_m": 3.0,
-    "route_subdivide_points": [
-      1,
-      2
-    ],
-    "route_midpoint_variation_radius_m": 2.0,
+    "route_variation_radius_m": 0.0,
+    "route_subdivide_points": 0,
+    "route_midpoint_variation_radius_m": 0.0,
     "route_drift_radius_m": 1.5,
     "route_drift_update_interval_sec": [
       15.0,
@@ -103,30 +100,59 @@
     "preserve_first_route_point": true,
     "distance_scale": 0.94,
     "distance_limit_m": 3200,
+    "route_mode": "track_400m",
+    "track_straight_sample_points": 10,
+    "track_curve_sample_points": 18,
+    "track_points": [
+      [
+        114.437553,
+        30.519142
+      ],
+      [
+        114.437414,
+        30.518185
+      ],
+      [
+        114.437742,
+        30.517800
+      ],
+      [
+        114.438213,
+        30.518108
+      ],
+      [
+        114.438339,
+        30.519045
+      ],
+      [
+        114.437984,
+        30.519442
+      ]
+    ],
     "route": [
       [
-        114.437575,
-        30.519154
+        114.437553,
+        30.519142
       ],
       [
-        114.438361,
-        30.519072
+        114.437414,
+        30.518185
       ],
       [
-        114.438209,
-        30.518088
+        114.437742,
+        30.517800
       ],
       [
-        114.437751,
-        30.517808
+        114.438213,
+        30.518108
       ],
       [
-        114.437423,
-        30.518158
+        114.438339,
+        30.519045
       ],
       [
-        114.437539,
-        30.519103
+        114.437984,
+        30.519442
       ]
     ]
   },
