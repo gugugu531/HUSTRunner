@@ -24,10 +24,10 @@
   "motion": {
     "jitter_radius_m": 0.8,
     "base_speed_mps": [
-      2.5,
-      3.2
+      4.0,
+      4.45
     ],
-    "speed_jitter_ratio": 0.12,
+    "speed_jitter_ratio": 0.08,
     "speed_update_interval_sec": [
       30.0,
       90.0
@@ -35,7 +35,7 @@
     "speed_smoothing_ratio": 0.06,
     "speed_micro_jitter_ratio": 0.03,
     "speed_micro_jitter_smoothing_ratio": 0.15,
-    "speed_pause_chance_per_min": 0.015,
+    "speed_pause_chance_per_min": 0.006,
     "speed_pause_duration_sec": [
       0.8,
       1.8
@@ -43,10 +43,10 @@
     "speed_modes": [
       {
         "name": "slow",
-        "weight": 0.18,
+        "weight": 0.12,
         "multiplier": [
-          0.72,
-          0.92
+          0.88,
+          0.98
         ],
         "duration_sec": [
           45.0,
@@ -55,9 +55,9 @@
       },
       {
         "name": "normal",
-        "weight": 0.66,
+        "weight": 0.64,
         "multiplier": [
-          0.93,
+          0.98,
           1.08
         ],
         "duration_sec": [
@@ -67,10 +67,10 @@
       },
       {
         "name": "fast",
-        "weight": 0.16,
+        "weight": 0.24,
         "multiplier": [
           1.08,
-          1.24
+          1.18
         ],
         "duration_sec": [
           25.0,
@@ -78,8 +78,8 @@
         ]
       }
     ],
-    "min_speed_mps": 1.7,
-    "max_speed_mps": 4.0,
+    "min_speed_mps": 3.6,
+    "max_speed_mps": 5.2,
     "tick_interval_sec": 1.0,
     "tick_interval_jitter_ratio": 0.12,
     "route_variation_radius_m": 0.0,
@@ -91,6 +91,16 @@
       35.0
     ],
     "route_drift_smoothing_ratio": 0.08,
+    "lane_change_chance_per_min": 0.18,
+    "lane_change_offset_m": [
+      -1.25,
+      1.25
+    ],
+    "lane_change_hold_sec": [
+      10.0,
+      24.0
+    ],
+    "lane_change_smoothing_ratio": 0.12,
     "gps_drift_radius_m": 2.0,
     "gps_drift_update_interval_sec": [
       20.0,

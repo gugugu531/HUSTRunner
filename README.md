@@ -117,9 +117,13 @@ HustRunner 是一个基于 MuMu 模拟器的校园跑自动化脚本。脚本通
 - `route_variation_radius_m`：运行前对路线点做轻微偏移。跑道模式下建议保持 `0`，避免圆弧被打散。
 - `route_subdivide_points`：在路线点之间插入随机中间点，支持固定值或 `[最小值, 最大值]`。跑道模式下建议保持 `0`。
 - `route_drift_radius_m`：行进时沿当前路段法线方向产生平滑横向漂移。
+- `lane_change_chance_per_min`：每分钟触发变道的概率，触发后会沿当前路段法线方向平滑偏移。
+- `lane_change_offset_m` / `lane_change_hold_sec`：变道偏移距离和保持时间。
 - `gps_drift_radius_m`：模拟 GPS 信号的慢速整体漂移，比高频抖动更接近真实轨迹。
 - `distance_scale`：距离倍率；如果 App 记录距离偏大，可略低于 `1.0`。
 - `distance_limit_m`：模拟距离达到该值后结束。
+
+当前默认速度配置以 `3200m` 约 `13min` 完成为目标，实际记录时长仍会受 App 采样、`distance_scale`、短暂停顿和随机配速影响。
 
 ### UI 自动化配置
 

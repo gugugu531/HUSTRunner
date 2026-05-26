@@ -943,6 +943,10 @@ def simulate_walk(ctx: JsonDict) -> None:
     route_drift_radius_m = float(motion.get("route_drift_radius_m", 0.0))
     route_drift_update_interval = motion.get("route_drift_update_interval_sec", [3.0, 8.0])
     route_drift_smoothing_ratio = float(motion.get("route_drift_smoothing_ratio", 0.25))
+    lane_change_chance_per_min = float(motion.get("lane_change_chance_per_min", 0.0))
+    lane_change_offset_m = motion.get("lane_change_offset_m", [-1.2, 1.2])
+    lane_change_hold_sec = motion.get("lane_change_hold_sec", [12.0, 28.0])
+    lane_change_smoothing_ratio = float(motion.get("lane_change_smoothing_ratio", 0.10))
     gps_drift_radius_m = float(motion.get("gps_drift_radius_m", 0.0))
     gps_drift_update_interval = motion.get("gps_drift_update_interval_sec", [20.0, 60.0])
     gps_drift_smoothing_ratio = float(motion.get("gps_drift_smoothing_ratio", 0.06))
@@ -970,6 +974,9 @@ def simulate_walk(ctx: JsonDict) -> None:
     route_drift_m = 0.0
     target_route_drift_m = random.uniform(-route_drift_radius_m, route_drift_radius_m) if route_drift_radius_m > 0 else 0.0
     next_route_drift_update = t_prev + random_range(route_drift_update_interval, 5.0)
+    lane_change_m = 0.0
+    target_lane_change_m = 0.0
+    lane_change_until = 0.0
     gps_drift_east_m, gps_drift_north_m = 0.0, 0.0
     target_gps_drift_east_m, target_gps_drift_north_m = random_disk_offset(gps_drift_radius_m)
     next_gps_drift_update = t_prev + random_range(gps_drift_update_interval, 40.0)
@@ -981,6 +988,7 @@ def simulate_walk(ctx: JsonDict) -> None:
         f"runtime_route_length={route_length_m(route):.2f}m, "
         f"route_points={len(route)}, route_variation_radius={motion.get('route_variation_radius_m', 0)}m, "
         f"route_drift_radius={route_drift_radius_m}m, "
+        f"lane_change_chance={lane_change_chance_per_min}/min, "
         f"gps_drift_radius={gps_drift_radius_m}m, "
         f"initial_speed={speed:.2f}m/s, speed_mode={speed_mode}, speed_duration={speed_duration:.1f}s",
     )
@@ -1031,14 +1039,27 @@ def simulate_walk(ctx: JsonDict) -> None:
         ratio = seg_dist / seg_len
         lon = lon1 + (lon2 - lon1) * ratio
         lat = lat1 + (lat2 - lat1) * ratio
+        if lane_change_chance_per_min > 0:
+            if lane_change_until <= now and abs(target_lane_change_m) > 0:
+                target_lane_change_m = 0.0
+                debug_log(ctx, "finish lane change hold")
+            if lane_change_until <= now and abs(target_lane_change_m) <= 0 and random.random() < lane_change_chance_per_min * dt / 60.0:
+                target_lane_change_m = random_range(lane_change_offset_m, 1.2)
+                if abs(target_lane_change_m) < 0.2:
+                    target_lane_change_m = 0.2 if target_lane_change_m >= 0 else -0.2
+                lane_change_until = now + max(0.0, random_range(lane_change_hold_sec, 18.0))
+                debug_log(ctx, f"start lane change target={target_lane_change_m:.2f}m, hold={lane_change_until - now:.1f}s")
+            lane_change_m += (target_lane_change_m - lane_change_m) * lane_change_smoothing_ratio
         if route_drift_radius_m > 0:
             if now >= next_route_drift_update:
                 target_route_drift_m = random.uniform(-route_drift_radius_m, route_drift_radius_m)
                 next_route_drift_update = now + random_range(route_drift_update_interval, 5.0)
                 debug_log(ctx, f"new route_drift={target_route_drift_m:.2f}m")
             route_drift_m += (target_route_drift_m - route_drift_m) * route_drift_smoothing_ratio
+        if route_drift_radius_m > 0 or abs(lane_change_m) > 0.01:
             east_unit, north_unit = segment_perpendicular_m(lon1, lat1, lon2, lat2)
-            lon, lat = offset_lon_lat(lon, lat, east_unit * route_drift_m, north_unit * route_drift_m)
+            lateral_m = route_drift_m + lane_change_m
+            lon, lat = offset_lon_lat(lon, lat, east_unit * lateral_m, north_unit * lateral_m)
         if gps_drift_radius_m > 0:
             if now >= next_gps_drift_update:
                 target_gps_drift_east_m, target_gps_drift_north_m = random_disk_offset(gps_drift_radius_m)
