@@ -10,7 +10,7 @@ pip install -r requirements.txt
 
 3. 启动MuMu模拟器
 * 首先新建设备，选择高级选项中的“性能”
-* 然后进入设备设置，性能-性能设置-高性能
+* 然后进入设备设置，性能-性能设置-高性能（Update：此点不一定必须，总之数据异常就切换一下这里的配置）
 * 然后设置分辨率为2560*1440
 * 安装华中大体育，由此下载：https://a.app.qq.com/o/simple.jsp?pkgname=net.crigh.hzkjsport&fromcase=40003
 
